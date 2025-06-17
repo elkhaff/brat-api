@@ -11,7 +11,7 @@ const { exec, spawn, execSync } = require('child_process');
 const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
-const tmpDir = path.join(__dirname, 'temp');
+const tmpDir = path.join(__dirname, 'tmp');
 if (!fs.existsSync(tmpDir)) {
   fs.mkdirSync(tmpDir, { recursive: true });
 }
