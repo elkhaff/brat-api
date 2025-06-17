@@ -5,7 +5,6 @@ const morgan = require('morgan');
 const { chromium } = require('playwright');
 const path = require('path');
 const os = require('os');
-const axios = require('axios');
 const crypto = require('crypto');
 const { exec, spawn, execSync } = require('child_process');
 const fs = require('fs');
@@ -15,6 +14,9 @@ const tmpDir = os.tmpdir();
 
 app.use(morgan('common'));
 
+// Hit counter
+let hit = 0;
+
 // Buat browser instance
 let browser;
 
@@ -23,14 +25,6 @@ const launchBrowser = async () => {
 }
 
 launchBrowser();
-
-async function fetchCount() {
-  try {
-    return (await axios.get("https://api.counterapi.dev/v1/aqul/brat/up")).data?.count || 0
-  } catch {
-    return 0
-  }
-}
 
 const brat = async (text) => {
   if (!browser) {
@@ -134,13 +128,12 @@ const bratvid = async (text) => {
 };
 
 app.get('/', async (req, res) => {
-  const hit = fetchCount();
   return res.status(200).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: await hit,
+    hit: hit,
     endpoints: {
       brat: '/brat?text=your_text_here',
       bratvid: '/bratvid?text=your_text_here'
@@ -159,20 +152,20 @@ app.get('/', async (req, res) => {
 
 app.get('/brat', async (req, res) => {
   const text = req.query.text;
-  const hit = fetchCount();
   
   if (!text) return res.status(400).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: await hit,
+    hit: hit,
     message: "Parameter `text` diperlukan",
     example: "/brat?text=your_text_here"
   });
 
   try {
     const imageBuffer = await brat(text);
+    hit++; // Increment hit counter setelah berhasil
     res.set('Content-Type', 'image/png');
     res.end(imageBuffer);
   } catch (error) {
@@ -186,14 +179,13 @@ app.get('/brat', async (req, res) => {
 
 app.get('/bratvid', async (req, res) => {
   const { text } = req.query;
-  const hit = fetchCount();
   
   if (!text) return res.status(400).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: await hit,
+    hit: hit,
     message: "Parameter `text` diperlukan",
     example: "/bratvid?text=your_text_here"
   });
@@ -202,6 +194,7 @@ app.get('/bratvid', async (req, res) => {
   
   try {
     const videoBuffer = await bratvid(text);
+    hit++; // Increment hit counter setelah berhasil
     res.set('Content-Type', 'video/mp4');
     res.end(videoBuffer);
   } catch (error) {
@@ -214,13 +207,12 @@ app.get('/bratvid', async (req, res) => {
 });
 
 app.use('*', async (req, res) => {
-  const hit = fetchCount();
   return res.status(404).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: await hit,
+    hit: hit,
     message: "Endpoint tidak ditemukan",
     availableEndpoints: [
       "/brat?text=your_text_here",
