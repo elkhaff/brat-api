@@ -11,10 +11,25 @@ const { exec, spawn, execSync } = require('child_process');
 const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
-const tmpDir = path.join(__dirname, 'tmp');
-if (!fs.existsSync(tmpDir)) {
-  fs.mkdirSync(tmpDir, { recursive: true });
-}
+
+// Use system temp directory instead of local temp
+const tmpDir = path.join(os.tmpdir(), 'brat-temp');
+
+// Create temp directory with proper error handling
+const ensureTempDir = () => {
+  try {
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      console.log('Temp directory created:', tmpDir);
+    }
+  } catch (error) {
+    console.error('Failed to create temp directory:', error);
+    throw new Error('Cannot create temporary directory. Check write permissions.');
+  }
+};
+
+// Initialize temp directory
+ensureTempDir();
 
 app.use(morgan('common'));
 
@@ -62,7 +77,7 @@ const brat = async (text) => {
   // Click on <input> #textInput
   await page.click('#textInput');
 
-  // Fill "sas" on <input> #textInput
+  // Fill text on <input> #textInput
   await page.fill('#textInput', text);
 
   const element = await page.$('#textOverlay');
@@ -84,20 +99,28 @@ const brat = async (text) => {
 
 const bratvid = async (text) => {
   const words = text.split(" ");
-  const tempDir = path.join(tmpDir, 'lib');
-  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+  
+  // Ensure temp directory exists
+  ensureTempDir();
+  
+  const tempSubDir = path.join(tmpDir, `lib-${crypto.randomUUID()}`);
+  if (!fs.existsSync(tempSubDir)) {
+    fs.mkdirSync(tempSubDir, { recursive: true });
+  }
+  
   const framePaths = [];
+  let fileListPath;
 
   try {
     for (let i = 0; i < words.length; i++) {
       const currentText = words.slice(0, i + 1).join(" ");
       const imageBuffer = await brat(currentText);
-      const framePath = path.join(tempDir, `frame${i}.png`);
+      const framePath = path.join(tempSubDir, `frame${i}.png`);
       fs.writeFileSync(framePath, imageBuffer);
       framePaths.push(framePath);
     }
     
-    const fileListPath = path.join(tempDir, "filelist.txt");
+    fileListPath = path.join(tempSubDir, "filelist.txt");
     let fileListContent = "";
 
     for (let i = 0; i < framePaths.length; i++) {
@@ -110,32 +133,37 @@ const bratvid = async (text) => {
 
     fs.writeFileSync(fileListPath, fileListContent);
     const filename = `${crypto.randomUUID()}.mp4`;
-    const outputVideoPath = path.join(tmpDir, filename);
+    const outputVideoPath = path.join(tempSubDir, filename);
 
-    execSync(`ffmpeg -y -f concat -safe 0 -i ${fileListPath} -vf "fps=30" -c:v libx264 -preset ultrafast -pix_fmt yuv420p ${outputVideoPath}`);
+    execSync(`ffmpeg -y -f concat -safe 0 -i "${fileListPath}" -vf "fps=30" -c:v libx264 -preset ultrafast -pix_fmt yuv420p "${outputVideoPath}"`);
     
     const videoBuffer = fs.readFileSync(outputVideoPath);
     
+    // Cleanup
     framePaths.forEach((frame) => {
       if (fs.existsSync(frame)) fs.unlinkSync(frame);
     });
     if (fs.existsSync(fileListPath)) fs.unlinkSync(fileListPath);
     if (fs.existsSync(outputVideoPath)) fs.unlinkSync(outputVideoPath);
+    if (fs.existsSync(tempSubDir)) fs.rmSync(tempSubDir, { recursive: true });
 
     return videoBuffer;
 
   } catch (err) {
     console.error(err);
    
+    // Cleanup on error
     framePaths.forEach((frame) => {
       if (fs.existsSync(frame)) fs.unlinkSync(frame);
     });
-    if (fs.existsSync(fileListPath)) fs.unlinkSync(fileListPath);
+    if (fileListPath && fs.existsSync(fileListPath)) fs.unlinkSync(fileListPath);
+    if (fs.existsSync(tempSubDir)) fs.rmSync(tempSubDir, { recursive: true });
     
     throw err;
   }
 };
 
+// Rest of your code remains the same...
 app.get('/', async (req, res) => {
   const hit = fetchCount();
   return res.status(200).json({
@@ -234,12 +262,13 @@ app.use('*', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Temp directory: ${tmpDir}`);
   console.log(`Available endpoints:`);
   console.log(`- GET /brat?text=your_text_here (Image)`);
   console.log(`- GET /bratvid?text=your_text_here (Video)`);
 });
 
-// Menangani penutupan server
+// Cleanup functions remain the same...
 const closeBrowser = async () => {
   if (browser) {
     console.log('Closing browser...');
@@ -254,8 +283,14 @@ const cleanupTempFiles = () => {
       const files = fs.readdirSync(tmpDir);
       files.forEach(file => {
         const filePath = path.join(tmpDir, file);
-        if (fs.statSync(filePath).isFile()) {
-          fs.unlinkSync(filePath);
+        try {
+          if (fs.statSync(filePath).isDirectory()) {
+            fs.rmSync(filePath, { recursive: true });
+          } else {
+            fs.unlinkSync(filePath);
+          }
+        } catch (err) {
+          console.error('Error removing file:', filePath, err);
         }
       });
       console.log('Temp files cleaned up');
