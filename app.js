@@ -12,10 +12,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const tmpDir = os.tmpdir();
 
-app.use(morgan('common'));
+// JSONBin configuration
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
+const JSONBIN_BIN_ID = process.env.BIN_ID;
 
-// Hit counter
-let hit = 0;
+app.use(morgan('common'));
 
 // Buat browser instance
 let browser;
@@ -25,6 +26,54 @@ const launchBrowser = async () => {
 }
 
 launchBrowser();
+
+// JSONBin.io functions
+async function getStats() {
+  try {
+    const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+      headers: {
+        'X-Master-Key': JSONBIN_KEY
+      }
+    });
+    const data = await response.json();
+    const stats = data.record || { brat: 0, bratvid: 0, totalHit: 0 };
+    
+    // Ensure all counts are valid numbers
+    return {
+      brat: Number(stats.brat) || 0,
+      bratvid: Number(stats.bratvid) || 0,
+      totalHit: Number(stats.totalHit) || 0
+    };
+  } catch (error) {
+    console.error('Error fetching stats:', error.message);
+    return { brat: 0, bratvid: 0, totalHit: 0 };
+  }
+}
+
+async function updateStats(type) {
+  try {
+    const currentStats = await getStats();
+    const newStats = {
+      brat: type === 'brat' ? currentStats.brat + 1 : currentStats.brat,
+      bratvid: type === 'bratvid' ? currentStats.bratvid + 1 : currentStats.bratvid,
+      totalHit: currentStats.totalHit + 1
+    };
+
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY
+      },
+      body: JSON.stringify(newStats)
+    });
+    
+    return newStats;
+  } catch (error) {
+    console.error('Error updating stats:', error.message);
+    return { brat: 0, bratvid: 0, totalHit: 0 };
+  }
+}
 
 const brat = async (text) => {
   if (!browser) {
@@ -128,12 +177,18 @@ const bratvid = async (text) => {
 };
 
 app.get('/', async (req, res) => {
+  const stats = await getStats();
+  
   return res.status(200).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: hit,
+    stats: {
+      brat: stats.brat,
+      bratvid: stats.bratvid,
+      totalHit: stats.totalHit
+    },
     endpoints: {
       brat: '/brat?text=your_text_here',
       bratvid: '/bratvid?text=your_text_here'
@@ -153,19 +208,28 @@ app.get('/', async (req, res) => {
 app.get('/brat', async (req, res) => {
   const text = req.query.text;
   
-  if (!text) return res.status(400).json({
-    author: '@elkaff',
-    repository: {
-      github: 'https://github.com/elkhaff/brat-api'
-    },
-    hit: hit,
-    message: "Parameter `text` diperlukan",
-    example: "/brat?text=your_text_here"
-  });
+  if (!text) {
+    const stats = await getStats();
+    return res.status(400).json({
+      author: '@elkaff',
+      repository: {
+        github: 'https://github.com/elkhaff/brat-api'
+      },
+      stats: {
+        brat: stats.brat,
+        bratvid: stats.bratvid,
+        totalHit: stats.totalHit
+      },
+      message: "Parameter `text` diperlukan",
+      example: "/brat?text=your_text_here"
+    });
+  }
 
   try {
     const imageBuffer = await brat(text);
-    hit++; // Increment hit counter setelah berhasil
+    const newStats = await updateStats('brat');
+    console.log(`✅ Brat image generated: "${text}" | Brat: ${newStats.brat} | Total: ${newStats.totalHit}`);
+    
     res.set('Content-Type', 'image/png');
     res.end(imageBuffer);
   } catch (error) {
@@ -180,21 +244,30 @@ app.get('/brat', async (req, res) => {
 app.get('/bratvid', async (req, res) => {
   const { text } = req.query;
   
-  if (!text) return res.status(400).json({
-    author: '@elkaff',
-    repository: {
-      github: 'https://github.com/elkhaff/brat-api'
-    },
-    hit: hit,
-    message: "Parameter `text` diperlukan",
-    example: "/bratvid?text=your_text_here"
-  });
+  if (!text) {
+    const stats = await getStats();
+    return res.status(400).json({
+      author: '@elkaff',
+      repository: {
+        github: 'https://github.com/elkhaff/brat-api'
+      },
+      stats: {
+        brat: stats.brat,
+        bratvid: stats.bratvid,
+        totalHit: stats.totalHit
+      },
+      message: "Parameter `text` diperlukan",
+      example: "/bratvid?text=your_text_here"
+    });
+  }
 
-  console.log(`/bratvid : ${text}`);
+  console.log(`📹 Generating bratvid: "${text}"`);
   
   try {
     const videoBuffer = await bratvid(text);
-    hit++; // Increment hit counter setelah berhasil
+    const newStats = await updateStats('bratvid');
+    console.log(`✅ Brat video generated: "${text}" | Bratvid: ${newStats.bratvid} | Total: ${newStats.totalHit}`);
+    
     res.set('Content-Type', 'video/mp4');
     res.end(videoBuffer);
   } catch (error) {
@@ -207,12 +280,18 @@ app.get('/bratvid', async (req, res) => {
 });
 
 app.use('*', async (req, res) => {
+  const stats = await getStats();
+  
   return res.status(404).json({
     author: '@elkaff',
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    hit: hit,
+    stats: {
+      brat: stats.brat,
+      bratvid: stats.bratvid,
+      totalHit: stats.totalHit
+    },
     message: "Endpoint tidak ditemukan",
     availableEndpoints: [
       "/brat?text=your_text_here",
