@@ -54,4 +54,5 @@ http://localhost:3000/
 
 ---
 
-Made by [@elkaff](https://github.com/elkhaff)
+> 👨‍💻 Original script by [Aqul](https://github.com/zennn08)  
+> 🔧 Recode & modded by [Elkaff](https://github.com/elkhaff)
