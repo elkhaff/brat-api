@@ -142,20 +142,7 @@ app.get('/', async (req, res) => {
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    stats: count,
-    endpoints: {
-      brat: '/brat?text=your_text_here',
-      bratvid: '/bratvid?text=your_text_here'
-    },
-    message: "Brat Generator API - Image and Video generation",
-    runtime: {
-      os: os.type(),
-      platform: os.platform(),
-      architecture: os.arch(),
-      cpuCount: os.cpus().length,
-      uptime: `${os.uptime()} seconds`,
-      memoryUsage: `${Math.round((os.totalmem() - os.freemem()) / 1024 / 1024)} MB used of ${Math.round(os.totalmem() / 1024 / 1024)} MB`
-    }
+    stats: count
   });
 });
 
@@ -163,15 +150,8 @@ app.get('/brat', async (req, res) => {
   const text = req.query.text;
 
   if (!text) {
-    const count = await getStats();
     return res.status(400).json({
-      author: '@elkaff',
-      repository: {
-        github: 'https://github.com/elkhaff/brat-api'
-      },
-      stats: count,
-      message: "Parameter text diperlukan",
-      example: "/brat?text=your_text_here"
+      message: "Parameter text diperlukan"
     });
   }
 
@@ -195,15 +175,8 @@ app.get('/bratvid', async (req, res) => {
   const { text } = req.query;
 
   if (!text) {
-    const count = await getStats();
     return res.status(400).json({
-      author: '@elkaff',
-      repository: {
-        github: 'https://github.com/elkhaff/brat-api'
-      },
-      stats: count,
-      message: "Parameter text diperlukan",
-      example: "/bratvid?text=your_text_here"
+      message: "Parameter text diperlukan"
     });
   }
 
@@ -231,20 +204,12 @@ app.use('*', async (req, res) => {
     repository: {
       github: 'https://github.com/elkhaff/brat-api'
     },
-    stats: count,
-    message: "Endpoint tidak ditemukan",
-    availableEndpoints: [
-      "/brat?text=your_text_here",
-      "/bratvid?text=your_text_here"
-    ]
+    stats: count
   });
 });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  console.log("Available endpoints:");
-  console.log("- GET /brat?text=your_text_here (Image)");
-  console.log("- GET /bratvid?text=your_text_here (Video)");
 });
 
 // Menangani penutupan server
