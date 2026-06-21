@@ -13,7 +13,7 @@ RUN apt-get update && \
 # Link lama udah 404, ini ganti ke source yang masih aktif.
 RUN mkdir -p /usr/share/fonts/truetype/apple-color-emoji && \
     curl -fL -o /usr/share/fonts/truetype/apple-color-emoji/AppleColorEmoji.ttf \
-      "https://github.com/samuelngs/apple-emoji-ttf/releases/download/macos-26-20260218-4989e498/AppleColorEmoji-Linux.ttf" && \
+      "https://github.com/samuelngs/apple-emoji-ttf/releases/download/macos-26-20260613-f1fc560b/AppleColorEmoji-Linux.ttf" && \
     fc-cache -f -v
 
 COPY package*.json ./
