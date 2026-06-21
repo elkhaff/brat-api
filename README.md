@@ -37,7 +37,7 @@ Semua query param opsional, ada default-nya kalau gak diisi:
 
 | Param | Default | Keterangan |
 |---|---|---|
-| `text` | `brat` | teks yang ditampilkan |
+| `text` | `brat` | teks yang ditampilkan (gak ada batasan panjang) |
 | `background` | `#ffffff` | hex warna background |
 | `color` | `#000000` | hex warna teks |
 | `speed` *(khusus `/vid`)* | `500` | ms jeda tiap kata muncul (200-2000) |
@@ -46,6 +46,10 @@ Semua query param opsional, ada default-nya kalau gak diisi:
 Hit `/` buat liat info & dokumentasi endpoint.
 
 > `/vid` butuh `ffmpeg` terpasang di environment (sudah otomatis di-install lewat Dockerfile).
+
+## CACHE
+
+Request dengan kombinasi parameter yang sama (text/background/color/dst) di-hash pakai SHA256 dan disimpan di folder `/cache`. Request berikutnya dengan parameter identik langsung diambil dari cache (response header `X-Cache: HIT`) tanpa perlu generate ulang. Cache otomatis kadaluarsa setelah 1 bulan (dibersihkan otomatis tiap 6 jam).
 
 ## EMOJI FONT
 

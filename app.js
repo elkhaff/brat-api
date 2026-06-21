@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const axios = require('axios');
 
@@ -13,6 +14,58 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(morgan('common'));
+
+// ----- Cache (SHA256 hash dari parameter -> file di /cache, TTL 1 bulan) -----
+const CACHE_DIR = path.join(__dirname, 'cache');
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 1 bulan
+fs.mkdirSync(CACHE_DIR, { recursive: true });
+
+function cacheKey(parts) {
+  return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+}
+
+function cachePath(type, hash) {
+  return path.join(CACHE_DIR, `${type}-${hash}.${type === 'img' ? 'png' : 'mp4'}`);
+}
+
+async function readCache(filePath) {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    if (Date.now() - stat.mtimeMs > CACHE_TTL_MS) return null; // udah expired
+    return await fs.promises.readFile(filePath);
+  } catch {
+    return null; // belum ada cache
+  }
+}
+
+async function writeCache(filePath, buffer) {
+  try {
+    await fs.promises.writeFile(filePath, buffer);
+  } catch (err) {
+    console.error('cache write error:', err);
+  }
+}
+
+// Bersihin file cache yang udah lewat TTL, jalan saat start + tiap 6 jam
+async function cleanupCache() {
+  try {
+    const files = await fs.promises.readdir(CACHE_DIR);
+    const now = Date.now();
+    await Promise.all(files.map(async (f) => {
+      const fp = path.join(CACHE_DIR, f);
+      try {
+        const stat = await fs.promises.stat(fp);
+        if (now - stat.mtimeMs > CACHE_TTL_MS) {
+          await fs.promises.unlink(fp);
+        }
+      } catch {}
+    }));
+  } catch (err) {
+    console.error('cache cleanup error:', err);
+  }
+}
+cleanupCache();
+setInterval(cleanupCache, 6 * 60 * 60 * 1000);
 
 // Buat browser instance
 let browser;
@@ -64,11 +117,22 @@ function resolveParams(req) {
 }
 
 // Buka halaman brat generator + setup theme & background.
-// Warna teks (.textFitted) sengaja TIDAK di-set di sini karena span-nya baru
-// kebentuk setelah #textInput pertama kali diisi (lihat applyTextColor).
-async function setupBratPage(page, { background } = {}) {
-  const filePath = path.join(__dirname, './site/index.html');
-  await page.goto(`file://${filePath}`);
+// NOTE: file './site/index.html' itu BUKAN halaman bratgenerator asli, itu index
+// hasil mirror HTTrack yang isinya cuma meta-refresh redirect -> goto langsung
+// ke file aslinya biar gak ada flash/delay redirect (penting banget buat /vid
+// karena recordVideo mulai ngerekam dari awal page dibuat).
+const BRAT_PAGE_PATH = path.join(__dirname, './site/www.bratgenerator.com/index.html');
+
+async function setupBratPage(page, { background, hideUntilReady = false } = {}) {
+  if (hideUntilReady) {
+    // Sembunyiin rendering dari awal load biar gak ke-capture flash tema
+    // default (ijo) sebelum kita sempet klik toggle white & isi teks.
+    await page.addInitScript(() => {
+      document.documentElement.style.visibility = 'hidden';
+    });
+  }
+
+  await page.goto(`file://${BRAT_PAGE_PATH}`);
   await page.click('#toggleButtonWhite');
   await page.click('#textOverlay');
   await page.click('#textInput');
@@ -78,6 +142,12 @@ async function setupBratPage(page, { background } = {}) {
       $('.node__content.clearfix').css('background-color', bg);
     }, background);
   }
+}
+
+async function revealPage(page) {
+  await page.evaluate(() => {
+    document.documentElement.style.visibility = 'visible';
+  });
 }
 
 async function applyTextColor(page, color) {
@@ -105,6 +175,16 @@ app.get('/', async (req, res) => {
 app.get('/img', async (req, res) => {
   const { text, background, color } = resolveParams(req);
 
+  const hash = cacheKey({ type: 'img', text, background, color });
+  const filePath = cachePath('img', hash);
+
+  const cached = await readCache(filePath);
+  if (cached) {
+    res.set('Content-Type', 'image/png');
+    res.set('X-Cache', 'HIT');
+    return res.end(cached);
+  }
+
   if (!browser) {
     await launchBrowser();
   }
@@ -125,15 +205,20 @@ app.get('/img', async (req, res) => {
     const element = await page.$('#textOverlay');
     const box = await element.boundingBox();
 
-    res.set('Content-Type', 'image/png');
-    res.end(await page.screenshot({
+    const buffer = await page.screenshot({
       clip: {
         x: box.x,
         y: box.y,
         width: 500,
         height: 500
       }
-    }));
+    });
+
+    res.set('Content-Type', 'image/png');
+    res.set('X-Cache', 'MISS');
+    res.end(buffer);
+
+    await writeCache(filePath, buffer);
   } catch (err) {
     console.error('img error:', err);
     if (!res.headersSent) {
@@ -147,10 +232,20 @@ app.get('/img', async (req, res) => {
 // GET /vid -> teks brat muncul kata demi kata, hasil akhir berupa video mp4
 app.get('/vid', async (req, res) => {
   const { text, background, color } = resolveParams(req);
-
-  const words = text.trim().split(/\s+/).filter(Boolean).slice(0, 40); // batasi 40 kata
   const speed = Math.min(Math.max(parseInt(req.query.speed) || 500, 200), 2000);
   const hold = Math.min(Math.max(parseInt(req.query.hold) || 1200, 0), 5000);
+
+  const words = text.trim().split(/\s+/).filter(Boolean); // gak ada batasan jumlah kata
+
+  const hash = cacheKey({ type: 'vid', text, background, color, speed, hold });
+  const filePath = cachePath('vid', hash);
+
+  const cached = await readCache(filePath);
+  if (cached) {
+    res.set('Content-Type', 'video/mp4');
+    res.set('X-Cache', 'HIT');
+    return res.end(cached);
+  }
 
   if (!browser) {
     await launchBrowser();
@@ -166,7 +261,7 @@ app.get('/vid', async (req, res) => {
     });
     const page = await context.newPage();
 
-    await setupBratPage(page, { background });
+    await setupBratPage(page, { background, hideUntilReady: true });
 
     let current = '';
     for (let i = 0; i < words.length; i++) {
@@ -174,6 +269,7 @@ app.get('/vid', async (req, res) => {
       await page.fill('#textInput', current);
       if (i === 0) {
         await applyTextColor(page, color); // span textFitted baru ada setelah fill pertama
+        await revealPage(page); // baru ke-reveal setelah frame pertama siap, gak ada flash
       }
       await page.waitForTimeout(speed);
     }
@@ -205,22 +301,23 @@ app.get('/vid', async (req, res) => {
       ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr}`))));
     });
 
+    const buffer = await fs.promises.readFile(outputPath);
+
     res.set('Content-Type', 'video/mp4');
-    res.sendFile(outputPath, (err) => {
-      fs.rm(workDir, { recursive: true, force: true }, () => {});
-      if (err && !res.headersSent) {
-        res.status(500).end();
-      }
-    });
+    res.set('X-Cache', 'MISS');
+    res.end(buffer);
+
+    await writeCache(filePath, buffer);
   } catch (err) {
     console.error('vid error:', err);
     if (context) {
       try { await context.close(); } catch {}
     }
-    fs.rm(workDir, { recursive: true, force: true }, () => {});
     if (!res.headersSent) {
       res.status(500).json(infoPayload({ message: 'Gagal membuat video', error: err.message }));
     }
+  } finally {
+    fs.rm(workDir, { recursive: true, force: true }, () => {});
   }
 });
 
