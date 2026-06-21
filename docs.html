@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brat API · Docs</title>
+<style>
+  :root {
+    --green: #8ACE00;
+    --bg: #0b0b0b;
+    --card: #141414;
+    --border: #262626;
+    --text: #f2f2f2;
+    --muted: #9a9a9a;
+    --mono: 'SF Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 20px 96px; }
+  header { margin-bottom: 48px; }
+  .badge {
+    display: inline-block;
+    background: var(--green);
+    color: #0b0b0b;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+  h1 {
+    font-size: 38px;
+    margin: 16px 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .lead { color: var(--muted); font-size: 16px; max-width: 56ch; }
+  .meta { margin-top: 18px; font-size: 14px; color: var(--muted); }
+  .meta a { color: var(--green); text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
+
+  h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 20px;
+    margin: 0 0 4px;
+    font-family: var(--mono);
+  }
+  .method {
+    display: inline-block;
+    background: #1a2e05;
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 18px;
+  }
+  .desc { color: var(--muted); font-size: 14.5px; margin: 8px 0 18px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td code, th code { font-family: var(--mono); }
+  tr:last-child td { border-bottom: none; }
+
+  code {
+    background: #1c1c1c;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: var(--mono);
+    font-size: 0.9em;
+    color: var(--green);
+  }
+  pre {
+    background: #0e0e0e;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: #d8d8d8;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; }
+  .ex-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; }
+
+  .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  footer a { color: var(--green); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="badge">brat</span>
+    <h1>Brat API</h1>
+    <p class="lead">Generate gambar &amp; video bergaya "brat" (album cover Charli XCX) dari teks apa aja — buat bot, project, atau eksperimen lo.</p>
+    <p class="meta">by <strong>elkaff</strong> · <a href="https://github.com/elkhaff/brat-api" target="_blank" rel="noopener">github.com/elkhaff/brat-api</a></p>
+  </header>
+
+  <h2>Endpoints</h2>
+
+  <div class="card">
+    <h3><span class="method">GET</span>/img</h3>
+    <p class="desc">Generate gambar PNG 500×500 statis.</p>
+
+    <table>
+      <tr><th>Param</th><th>Tipe</th><th>Default</th><th>Keterangan</th></tr>
+      <tr><td><code>text</code></td><td>string</td><td><code>brat</code></td><td>Teks yang ditampilkan. Gak ada batasan panjang.</td></tr>
+      <tr><td><code>background</code></td><td>hex color</td><td><code>#ffffff</code></td><td>Warna background, contoh <code>%23ff0000</code> (urlencode <code>#</code>).</td></tr>
+      <tr><td><code>color</code></td><td>hex color</td><td><code>#000000</code></td><td>Warna teks.</td></tr>
+    </table>
+
+    <p class="ex-label">Contoh</p>
+    <pre><code>GET /img?text=brat+summer&background=%2300ff66&color=%23000000</code></pre>
+  </div>
+
+  <div class="card">
+    <h3><span class="method">GET</span>/vid</h3>
+    <p class="desc">Generate video MP4 500×500 — teks muncul kata demi kata, mirip animasi di bratgenerator.com.</p>
+
+    <table>
+      <tr><th>Param</th><th>Tipe</th><th>Default</th><th>Keterangan</th></tr>
+      <tr><td><code>text</code></td><td>string</td><td><code>brat</code></td><td>Teks yang dianimasiin. Gak ada batasan panjang.</td></tr>
+      <tr><td><code>background</code></td><td>hex color</td><td><code>#ffffff</code></td><td>Warna background.</td></tr>
+      <tr><td><code>color</code></td><td>hex color</td><td><code>#000000</code></td><td>Warna teks.</td></tr>
+      <tr><td><code>speed</code></td><td>integer (ms)</td><td><code>500</code></td><td>Jeda antar kata muncul. Dibatasin 200–2000.</td></tr>
+      <tr><td><code>hold</code></td><td>integer (ms)</td><td><code>1200</code></td><td>Lama frame terakhir ditahan sebelum video selesai. Dibatasin 0–5000.</td></tr>
+    </table>
+
+    <p class="ex-label">Contoh</p>
+    <pre><code>GET /vid?text=brat+and+it%27s+completely+different&speed=400&hold=1500</code></pre>
+  </div>
+
+  <h2>Cache</h2>
+  <div class="card">
+    <p class="desc" style="margin-bottom:0">
+      Setiap kombinasi parameter di-hash pakai <strong>SHA256</strong> dan hasilnya disimpan di folder <code>/cache</code> di server.
+      Request berikutnya dengan parameter yang persis sama langsung diambil dari cache (response header <code>X-Cache: HIT</code>),
+      gak perlu render ulang lewat browser. Kalau parameternya beda dikit aja (termasuk <code>speed</code>/<code>hold</code>), hash-nya beda → generate baru (<code>X-Cache: MISS</code>).
+      Cache otomatis kedaluwarsa setelah <strong>30 hari</strong>.
+    </p>
+  </div>
+
+  <h2>Font Emoji</h2>
+  <div class="card">
+    <p class="desc" style="margin-bottom:0">
+      Server udah ter-install font <a href="https://github.com/samuelngs/apple-emoji-ttf" target="_blank" rel="noopener">Apple Color Emoji (build Linux)</a>
+      lewat Docker image, jadi emoji di dalam <code>text</code> ke-render dengan benar (bukan kotak kosong).
+    </p>
+  </div>
+
+  <h2>Error Response</h2>
+  <div class="card">
+    <p class="desc">Kalau ada masalah pas generate, response berupa JSON:</p>
+    <pre><code>{
+  "author": "elkaff",
+  "repository": { "github": "https://github.com/elkhaff/brat-api" },
+  "message": "Gagal membuat video",
+  "error": "..."
+}</code></pre>
+  </div>
+
+  <footer>
+    Brat API · by elkaff · <a href="https://github.com/elkhaff/brat-api" target="_blank" rel="noopener">source di GitHub</a>
+  </footer>
+
+</div>
+</body>
+</html>

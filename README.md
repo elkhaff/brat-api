@@ -14,7 +14,7 @@ short_description: bart
 ## HOW TO INSTALL
 
 ```bash
-git clone https://github.com/zennn08/brat-api
+git clone https://github.com/elkhaff/brat-api
 cd brat-api
 npx playwright install
 npm install
@@ -43,7 +43,7 @@ Semua query param opsional, ada default-nya kalau gak diisi:
 | `speed` *(khusus `/vid`)* | `500` | ms jeda tiap kata muncul (200-2000) |
 | `hold` *(khusus `/vid`)* | `1200` | ms nahan frame terakhir (0-5000) |
 
-Hit `/` buat liat info & dokumentasi endpoint.
+Dokumentasi lengkap ada di `/docs`. Root path `/` redirect ke https://pomni.cc.cd.
 
 > `/vid` butuh `ffmpeg` terpasang di environment (sudah otomatis di-install lewat Dockerfile).
 

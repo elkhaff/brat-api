@@ -8,7 +8,6 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +15,10 @@ const PORT = process.env.PORT || 3000;
 app.use(morgan('common'));
 
 // ----- Cache (SHA256 hash dari parameter -> file di /cache, TTL 1 bulan) -----
+// GENERATION_VERSION ikut masuk ke hash. Setiap kali logic generate gambar/video
+// berubah (bugfix dll), bump versi ini biar cache lama otomatis gak ke-pake lagi
+// (gak perlu manual hapus folder /cache pas redeploy).
+const GENERATION_VERSION = 'v2';
 const CACHE_DIR = path.join(__dirname, 'cache');
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 1 bulan
 fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -76,19 +79,12 @@ const launchBrowser = async () => {
 
 launchBrowser();
 
-async function fetchCount() {
-  try {
-    return (await axios.get("https://api.counterapi.dev/v1/aqul/brat/up")).data?.count || 0
-  } catch {
-    return 0
-  }
-}
-
+// (hit counter dihapus, gak ada lagi tempat buat nampilinnya sejak '/' redirect)
 function infoPayload(extra = {}) {
   return {
     author: 'elkaff',
     repository: {
-      github: 'https://github.com/zennn08/brat-api/'
+      github: 'https://github.com/elkhaff/brat-api'
     },
     runtime: {
       os: os.type(),
@@ -157,25 +153,21 @@ async function applyTextColor(page, color) {
   }, color);
 }
 
-// GET / -> info & dokumentasi API
-app.get('/', async (req, res) => {
-  const hit = await fetchCount();
-  res.status(200).json(infoPayload({
-    hit,
-    message: 'Brat API by elkaff',
-    endpoints: {
-      '/img': 'Generate gambar brat. Query: text, background, color (semua opsional, ada default)',
-      '/vid': 'Generate video brat (teks muncul kata per kata). Query: text, background, color, speed, hold (semua opsional, ada default)'
-    },
-    defaults: DEFAULTS
-  }));
+// GET / -> redirect ke halaman utama
+app.get('/', (req, res) => {
+  res.redirect('https://pomni.cc.cd');
+});
+
+// GET /docs -> dokumentasi API lengkap
+app.get('/docs', (req, res) => {
+  res.sendFile(path.join(__dirname, 'docs.html'));
 });
 
 // GET /img -> screenshot gambar brat
 app.get('/img', async (req, res) => {
   const { text, background, color } = resolveParams(req);
 
-  const hash = cacheKey({ type: 'img', text, background, color });
+  const hash = cacheKey({ v: GENERATION_VERSION, type: 'img', text, background, color });
   const filePath = cachePath('img', hash);
 
   const cached = await readCache(filePath);
@@ -237,7 +229,7 @@ app.get('/vid', async (req, res) => {
 
   const words = text.trim().split(/\s+/).filter(Boolean); // gak ada batasan jumlah kata
 
-  const hash = cacheKey({ type: 'vid', text, background, color, speed, hold });
+  const hash = cacheKey({ v: GENERATION_VERSION, type: 'vid', text, background, color, speed, hold });
   const filePath = cachePath('vid', hash);
 
   const cached = await readCache(filePath);
@@ -321,10 +313,11 @@ app.get('/vid', async (req, res) => {
   }
 });
 
-// Path lain -> 404 + arahin ke endpoint yang bener
+// Path lain -> 404 + arahin ke docs
 app.use('*', async (req, res) => {
   res.status(404).json(infoPayload({
-    message: 'Endpoint tidak ditemukan. Coba /img atau /vid'
+    message: 'Endpoint tidak ditemukan. Liat dokumentasi lengkap di /docs',
+    endpoints: { img: '/img', vid: '/vid', docs: '/docs' }
   }));
 });
 
