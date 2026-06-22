@@ -18,7 +18,7 @@ app.use(morgan('common'));
 // GENERATION_VERSION ikut masuk ke hash. Setiap kali logic generate gambar/video
 // berubah (bugfix dll), bump versi ini biar cache lama otomatis gak ke-pake lagi
 // (gak perlu manual hapus folder /cache pas redeploy).
-const GENERATION_VERSION = 'v2';
+const GENERATION_VERSION = 'v3'; // v3: /vid gak pake recordVideo lagi, full screenshot-based
 const CACHE_DIR = path.join(__dirname, 'cache');
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 1 bulan
 fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -115,19 +115,10 @@ function resolveParams(req) {
 // Buka halaman brat generator + setup theme & background.
 // NOTE: file './site/index.html' itu BUKAN halaman bratgenerator asli, itu index
 // hasil mirror HTTrack yang isinya cuma meta-refresh redirect -> goto langsung
-// ke file aslinya biar gak ada flash/delay redirect (penting banget buat /vid
-// karena recordVideo mulai ngerekam dari awal page dibuat).
+// ke file aslinya biar gak ada flash/delay redirect.
 const BRAT_PAGE_PATH = path.join(__dirname, './site/www.bratgenerator.com/index.html');
 
-async function setupBratPage(page, { background, hideUntilReady = false } = {}) {
-  if (hideUntilReady) {
-    // Sembunyiin rendering dari awal load biar gak ke-capture flash tema
-    // default (ijo) sebelum kita sempet klik toggle white & isi teks.
-    await page.addInitScript(() => {
-      document.documentElement.style.visibility = 'hidden';
-    });
-  }
-
+async function setupBratPage(page, { background } = {}) {
   await page.goto(`file://${BRAT_PAGE_PATH}`);
   await page.click('#toggleButtonWhite');
   await page.click('#textOverlay');
@@ -138,12 +129,6 @@ async function setupBratPage(page, { background, hideUntilReady = false } = {}) 
       $('.node__content.clearfix').css('background-color', bg);
     }, background);
   }
-}
-
-async function revealPage(page) {
-  await page.evaluate(() => {
-    document.documentElement.style.visibility = 'visible';
-  });
 }
 
 async function applyTextColor(page, color) {
@@ -158,9 +143,45 @@ app.get('/', (req, res) => {
   res.redirect('https://pomni.cc.cd');
 });
 
-// GET /docs -> dokumentasi API lengkap
+// GET /docs -> dokumentasi API lengkap (JSON)
 app.get('/docs', (req, res) => {
-  res.sendFile(path.join(__dirname, 'docs.html'));
+  res.status(200).json(infoPayload({
+    description: 'Generate gambar & video bergaya "brat" (album cover Charli XCX) dari teks apa aja.',
+    endpoints: {
+      'GET /img': {
+        description: 'Generate gambar PNG 500x500 statis',
+        params: {
+          text: { type: 'string', default: DEFAULTS.text, description: 'Teks yang ditampilkan, gak ada batasan panjang' },
+          background: { type: 'hex color', default: DEFAULTS.background, description: 'Warna background, contoh %23ff0000 (urlencode #)' },
+          color: { type: 'hex color', default: DEFAULTS.color, description: 'Warna teks' }
+        },
+        example: '/img?text=brat+summer&background=%2300ff66&color=%23000000'
+      },
+      'GET /vid': {
+        description: 'Generate video MP4 500x500, teks muncul kata demi kata',
+        params: {
+          text: { type: 'string', default: DEFAULTS.text, description: 'Teks yang dianimasiin, gak ada batasan panjang' },
+          background: { type: 'hex color', default: DEFAULTS.background, description: 'Warna background' },
+          color: { type: 'hex color', default: DEFAULTS.color, description: 'Warna teks' },
+          speed: { type: 'integer (ms)', default: 500, range: '200-2000', description: 'Jeda antar kata muncul' },
+          hold: { type: 'integer (ms)', default: 1200, range: '0-5000', description: 'Lama frame terakhir ditahan' }
+        },
+        example: "/vid?text=brat+and+it's+completely+different&speed=400&hold=1500"
+      }
+    },
+    cache: {
+      description: 'Tiap kombinasi parameter di-hash SHA256, hasil generate disimpan di folder /cache. Request berikutnya dengan parameter identik langsung diambil dari cache.',
+      ttl: '30 hari, dibersihkan otomatis tiap 6 jam',
+      header: 'X-Cache: HIT (dari cache) atau MISS (generate baru)'
+    },
+    emojiFont: 'Apple Color Emoji (build Linux) sudah ter-install di server, jadi emoji di dalam `text` ke-render dengan benar.',
+    errorResponseExample: {
+      author: 'elkaff',
+      repository: { github: 'https://github.com/elkhaff/brat-api' },
+      message: 'Gagal membuat video',
+      error: '...'
+    }
+  }));
 });
 
 // GET /img -> screenshot gambar brat
@@ -222,6 +243,19 @@ app.get('/img', async (req, res) => {
 });
 
 // GET /vid -> teks brat muncul kata demi kata, hasil akhir berupa video mp4
+//
+// NOTE PENTING: ini SENGAJA gak pake Playwright recordVideo. recordVideo ngerekam
+// dari context dibuat (termasuk proses navigasi awal), jadi gampang ke-capture
+// frame transisi yang salah meskipun sudah di-setup duluan. Solusinya: generate
+// video dengan cara screenshot manual tiap kata (sama persis kayak /img yang
+// terbukti selalu benar) -> tiap screenshot di-hardlink berulang sesuai durasi
+// yang diinginkan jadi sequence frame constant-framerate -> baru di-encode ffmpeg.
+// Hardlink dipake (bukan copy) biar gak ada pemborosan disk walau 1 kata bisa
+// muncul jadi puluhan frame fisik. Pendekatan CFR ini juga lebih akurat
+// durasinya dibanding concat demuxer dengan custom duration (yang ternyata
+// metadata durasinya suka meleset).
+const VID_FPS = 24;
+
 app.get('/vid', async (req, res) => {
   const { text, background, color } = resolveParams(req);
   const speed = Math.min(Math.max(parseInt(req.query.speed) || 500, 200), 2000);
@@ -244,46 +278,62 @@ app.get('/vid', async (req, res) => {
   }
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bratvid-'));
+  const wordsDir = path.join(workDir, 'words'); // 1 file per kata (screenshot asli)
+  const seqDir = path.join(workDir, 'seq'); // hardlink sequence buat ffmpeg
+  fs.mkdirSync(wordsDir);
+  fs.mkdirSync(seqDir);
   let context;
 
   try {
-    context = await browser.newContext({
-      viewport: { width: 1536, height: 695 },
-      recordVideo: { dir: workDir, size: { width: 1536, height: 695 } }
-    });
+    context = await browser.newContext({ viewport: { width: 1536, height: 695 } });
     const page = await context.newPage();
 
-    await setupBratPage(page, { background, hideUntilReady: true });
+    await setupBratPage(page, { background });
 
+    // Set teks penuh dulu sekali buat nentuin posisi crop yang stabil dipake
+    // di semua frame (textOverlay center-nya gak geser drastis antar frame).
+    await page.fill('#textInput', text);
+    await applyTextColor(page, color);
+    const boxEl = await page.$('#textOverlay');
+    const box = await boxEl.boundingBox();
+    const clip = { x: box.x, y: box.y, width: 500, height: 500 };
+
+    // Ambil 1 screenshot per kata (kumulatif), lalu hardlink jadi sequence
+    // frame sebanyak yang dibutuhin biar durasi tampilnya sesuai speed/hold.
     let current = '';
+    let frameIndex = 0;
     for (let i = 0; i < words.length; i++) {
       current = current ? `${current} ${words[i]}` : words[i];
       await page.fill('#textInput', current);
       if (i === 0) {
-        await applyTextColor(page, color); // span textFitted baru ada setelah fill pertama
-        await revealPage(page); // baru ke-reveal setelah frame pertama siap, gak ada flash
+        await applyTextColor(page, color); // span textFitted baru kebentuk setelah fill pertama
       }
-      await page.waitForTimeout(speed);
+      await page.waitForTimeout(50); // kasih waktu reflow textFit settle sebelum di-capture
+
+      const wordFramePath = path.join(wordsDir, `w${String(i).padStart(5, '0')}.png`);
+      const buf = await page.screenshot({ clip });
+      await fs.promises.writeFile(wordFramePath, buf);
+
+      const durationMs = i === words.length - 1 ? hold : speed;
+      const repeatCount = Math.max(1, Math.round((durationMs / 1000) * VID_FPS));
+      for (let k = 0; k < repeatCount; k++) {
+        const seqPath = path.join(seqDir, `f${String(frameIndex).padStart(6, '0')}.png`);
+        await fs.promises.link(wordFramePath, seqPath);
+        frameIndex++;
+      }
     }
-    await page.waitForTimeout(hold);
 
-    const element = await page.$('#textOverlay');
-    const box = await element.boundingBox();
-
-    const video = page.video();
     await context.close();
     context = null;
 
-    const rawVideoPath = await video.path();
     const outputPath = path.join(workDir, 'output.mp4');
-
     await new Promise((resolve, reject) => {
       const ff = spawn('ffmpeg', [
         '-y',
-        '-i', rawVideoPath,
-        '-filter:v', `crop=500:500:${Math.round(box.x)}:${Math.round(box.y)}`,
-        '-c:v', 'libx264',
+        '-framerate', String(VID_FPS),
+        '-i', path.join(seqDir, 'f%06d.png'),
         '-pix_fmt', 'yuv420p',
+        '-c:v', 'libx264',
         '-movflags', '+faststart',
         outputPath
       ]);
