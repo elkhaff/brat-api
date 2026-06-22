@@ -107,9 +107,18 @@
 
   .header-left {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
   }
+  .header-favicon {
+    display: flex;
+    align-items: center;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+  .header-favicon:hover { opacity: 1; }
+  .header-favicon img { display: block; border-radius: 4px; }
 
   .wordmark {
     font-family: var(--font-narrow);
@@ -349,6 +358,53 @@
     height: 100%;
     object-fit: contain;
     display: block;
+    /* video: matiin pointer events biar player chrome-nya gak bisa di-klik */
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ── PRESETS ── */
+  .presets-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .presets-label svg { width: 12px; height: 12px; }
+  .preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .preset-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.03em;
+    transition: border-color 0.1s, background 0.1s;
+    white-space: nowrap;
+  }
+  .preset-chip:hover { border-color: var(--text); }
+  .preset-chip.active { border-color: var(--text); background: var(--surface); }
+  .preset-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
   }
 
   .preview-placeholder {
@@ -502,6 +558,9 @@
 <!-- ════════════════ HEADER ════════════════ -->
 <header>
   <div class="header-left">
+    <a href="https://l.elkaff.is-a.dev" target="_blank" rel="noopener" class="header-favicon" aria-label="elkaff">
+      <img src="https://elkaff.is-a.dev/favicon.svg" alt="elkaff" width="22" height="22">
+    </a>
     <span class="wordmark">brat</span>
     <span class="header-sub">generator</span>
   </div>
@@ -575,6 +634,15 @@
             <input type="text"  id="ct-fg" value="#000000" maxlength="7" spellcheck="false" aria-label="Text color hex value">
           </div>
         </div>
+      </div>
+
+      <!-- COLOR PRESETS -->
+      <div>
+        <div class="presets-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><path d="M8 12a4 4 0 0 1 8 0"/></svg>
+          Presets
+        </div>
+        <div class="preset-chips" id="preset-chips"></div>
       </div>
 
       <!-- VID PARAMS -->
@@ -746,6 +814,53 @@ function slugify(s) {
   return s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 40) || 'brat';
 }
 
+function makeFilename(ext) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const date = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const type = ext === 'png' ? 'img' : 'vid';
+  return `brat.zone.id-${date}-${type}.${ext}`;
+}
+
+/* ── COLOR PRESETS ── */
+const PRESETS = [
+  { name: 'brat',      bg: '#8ace00', fg: '#000000' },
+  { name: 'classic',   bg: '#ffffff', fg: '#000000' },
+  { name: 'dark',      bg: '#000000', fg: '#ffffff' },
+  { name: 'pink',      bg: '#ff69b4', fg: '#000000' },
+  { name: 'lime',      bg: '#ccff00', fg: '#000000' },
+  { name: 'fire',      bg: '#ff2200', fg: '#ffffff' },
+  { name: 'midnight',  bg: '#0a0a1a', fg: '#8ace00' },
+  { name: 'lavender',  bg: '#e6ccff', fg: '#2d0060' },
+  { name: 'cream',     bg: '#f5f0e8', fg: '#1a1a1a' },
+  { name: 'blue',      bg: '#0000ff', fg: '#ffff00' },
+];
+
+function renderPresets() {
+  const container = $('preset-chips');
+  container.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-chip';
+    btn.dataset.idx = i;
+    btn.innerHTML = `<span class="preset-swatch" style="background:${p.bg};border-color:${p.fg}22"></span>${p.name}`;
+    btn.onclick = () => applyPreset(i);
+    container.appendChild(btn);
+  });
+}
+
+function applyPreset(idx) {
+  const p = PRESETS[idx];
+  $('cp-bg').value = p.bg; $('ct-bg').value = p.bg;
+  $('cp-fg').value = p.fg; $('ct-fg').value = p.fg;
+  document.querySelectorAll('.preset-chip').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  if (mode === 'img') triggerImg();
+}
+
+renderPresets();
+
 /* ── HELPERS ── */
 function showOverlay(on, msg = 'Loading…') {
   $('overlay-msg').textContent = msg;
@@ -768,11 +883,18 @@ function clearPreview() {
 
 function setActions(apiUrl, dlUrl, ext) {
   currentUrl = apiUrl;
-  const name = `brat-${slugify($('inp-text').value)}.${ext}`;
   $('btn-open').href    = apiUrl;
   $('btn-dl').href      = dlUrl || apiUrl;
-  $('btn-dl').download  = name;
+  $('btn-dl').download  = makeFilename(ext);
   $('actions').classList.add('visible');
+}
+
+function scrollToPreview() {
+  // Pada mobile (single-col) scroll ke actions biar tombol download langsung keliatan.
+  // Desktop (2-col, preview sticky) gak perlu scroll jadi check dulu.
+  const isDesktop = window.matchMedia('(min-width: 720px)').matches;
+  if (isDesktop) return;
+  $('actions').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /* ── MODE ── */
@@ -796,25 +918,37 @@ function setMode(m) {
 function triggerImg() {
   clearTimeout(debounceTimer);
   if (mode !== 'img') return;
-  debounceTimer = setTimeout(() => {
+  debounceTimer = setTimeout(async () => {
     clearPreview();
     const url = buildUrl();
     showOverlay(true, 'Loading image…');
     $('preview-placeholder').style.display = 'none';
 
-    const img = document.createElement('img');
-    img.alt = 'brat preview';
-    img.onload = () => {
-      showOverlay(false);
-      $('preview-box').appendChild(img);
-      setActions(url, url, 'png');
-    };
-    img.onerror = () => {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`API returned ${resp.status}`);
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+
+      const img = document.createElement('img');
+      img.alt = 'brat preview';
+      img.onload = () => {
+        showOverlay(false);
+        $('preview-box').appendChild(img);
+        setActions(url, objUrl, 'png');
+        scrollToPreview();
+      };
+      img.onerror = () => {
+        $('preview-placeholder').style.display = '';
+        showOverlay(false);
+        showError('Failed to load image.');
+      };
+      img.src = objUrl;
+    } catch (err) {
       $('preview-placeholder').style.display = '';
       showOverlay(false);
       showError('Failed to load — API might be waking up (cold start ~30s). Try again shortly.');
-    };
-    img.src = url;
+    }
   }, 600);
 }
 
@@ -838,15 +972,17 @@ async function generateVid() {
     const objUrl = URL.createObjectURL(blob);
 
     const vid = document.createElement('video');
-    vid.controls = true;
-    vid.autoplay = true;
-    vid.loop     = true;
+    // SENGAJA gak set controls, autoplay, loop biar video keliatan kayak
+    // gambar tertanam — native player chrome gak muncul, dan CSS
+    // pointer-events:none bikin area preview gak bisa di-klik sama sekali.
     vid.playsInline = true;
+    vid.muted = true;
     vid.src = objUrl;
     vid.onloadeddata = () => {
       showOverlay(false);
       $('preview-box').appendChild(vid);
       setActions(url, objUrl, 'mp4');
+      scrollToPreview();
     };
   } catch (err) {
     $('preview-placeholder').style.display = '';

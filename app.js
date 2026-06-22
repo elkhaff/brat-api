@@ -143,7 +143,27 @@ app.get('/', (req, res) => {
   res.redirect('https://pomni.cc.cd');
 });
 
-// GET /docs -> dokumentasi API lengkap (JSON)
+// GET /colors -> daftar preset warna yang tersedia
+app.get('/colors', (req, res) => {
+  res.status(200).json({
+    author: 'elkaff',
+    note: 'Semua hex color valid (#rrggbb) bisa dipakai di param background dan color. Berikut preset populer.',
+    presets: [
+      { name: 'brat',       background: '#8ace00', color: '#000000', description: 'Warna ikonik album brat Charli XCX' },
+      { name: 'classic',    background: '#ffffff', color: '#000000', description: 'Putih & hitam, default' },
+      { name: 'dark',       background: '#000000', color: '#ffffff', description: 'Hitam & putih' },
+      { name: 'pink',       background: '#ff69b4', color: '#000000', description: 'Y2K hot pink' },
+      { name: 'lime',       background: '#ccff00', color: '#000000', description: 'Neon lime' },
+      { name: 'fire',       background: '#ff2200', color: '#ffffff', description: 'Merah nyala' },
+      { name: 'midnight',   background: '#0a0a1a', color: '#8ace00', description: 'Dark + brat green accent' },
+      { name: 'lavender',   background: '#e6ccff', color: '#2d0060', description: 'Soft purple' },
+      { name: 'cream',      background: '#f5f0e8', color: '#1a1a1a', description: 'Warm minimal' },
+      { name: 'blue',       background: '#0000ff', color: '#ffff00', description: 'Bold electric contrast' },
+    ]
+  });
+});
+
+
 app.get('/docs', (req, res) => {
   res.status(200).json(infoPayload({
     description: 'Generate gambar & video bergaya "brat" (album cover Charli XCX) dari teks apa aja.',
