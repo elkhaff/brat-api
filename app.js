@@ -18,7 +18,7 @@ app.use(morgan('common'));
 // GENERATION_VERSION ikut masuk ke hash. Setiap kali logic generate gambar/video
 // berubah (bugfix dll), bump versi ini biar cache lama otomatis gak ke-pake lagi
 // (gak perlu manual hapus folder /cache pas redeploy).
-const GENERATION_VERSION = 'v3'; // v3: /vid gak pake recordVideo lagi, full screenshot-based
+const GENERATION_VERSION = 'v4'; // v4: fix warna teks cuma kena frame pertama di /vid
 const CACHE_DIR = path.join(__dirname, 'cache');
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 1 bulan
 fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -305,10 +305,11 @@ app.get('/vid', async (req, res) => {
     for (let i = 0; i < words.length; i++) {
       current = current ? `${current} ${words[i]}` : words[i];
       await page.fill('#textInput', current);
-      if (i === 0) {
-        await applyTextColor(page, color); // span textFitted baru kebentuk setelah fill pertama
-      }
       await page.waitForTimeout(50); // kasih waktu reflow textFit settle sebelum di-capture
+      // applyTextColor dipanggil SETIAP iterasi (bukan cuma i===0) karena
+      // tiap page.fill() bikin textFit recalculate dan replace .textFitted span-nya,
+      // otomatis nge-reset inline style warna yang sudah di-set sebelumnya.
+      await applyTextColor(page, color);
 
       const wordFramePath = path.join(wordsDir, `w${String(i).padStart(5, '0')}.png`);
       const buf = await page.screenshot({ clip });
