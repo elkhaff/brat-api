@@ -169,6 +169,21 @@ app.get('/docs', (req, res) => {
         example: "/vid?text=brat+and+it's+completely+different&speed=400&hold=1500"
       }
     },
+    availableColors: {
+      note: 'Semua hex color valid (#rrggbb). Berikut palet populer yang cocok dengan estetika brat:',
+      presets: [
+        { name: 'brat green',   background: '#8ace00', color: '#000000', description: 'Warna ikonik album brat Charli XCX' },
+        { name: 'classic',      background: '#ffffff', color: '#000000', description: 'Putih & hitam, default' },
+        { name: 'dark mode',    background: '#000000', color: '#ffffff', description: 'Hitam & putih' },
+        { name: 'hot pink',     background: '#ff69b4', color: '#000000', description: 'Y2K pink' },
+        { name: 'electric blue',background: '#0000ff', color: '#ffff00', description: 'Bold contrast' },
+        { name: 'lime',         background: '#ccff00', color: '#000000', description: 'Neon lime' },
+        { name: 'fire',         background: '#ff2200', color: '#ffffff', description: 'Merah nyala' },
+        { name: 'lavender',     background: '#e6ccff', color: '#2d0060', description: 'Soft purple' },
+        { name: 'cream',        background: '#f5f0e8', color: '#1a1a1a', description: 'Warm minimal' },
+        { name: 'midnight',     background: '#0a0a1a', color: '#8ace00', description: 'Dark + brat green accent' }
+      ]
+    },
     cache: {
       description: 'Tiap kombinasi parameter di-hash SHA256, hasil generate disimpan di folder /cache. Request berikutnya dengan parameter identik langsung diambil dari cache.',
       ttl: '30 hari, dibersihkan otomatis tiap 6 jam',
